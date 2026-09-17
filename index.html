@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>旅遊記帳</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2b3a55">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
 <style>
   * { box-sizing: border-box; }
   body {
@@ -225,13 +229,14 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 </script>
 <script>
 /* ===== IndexedDB ===== */
-const DB_NAME = 'TravelExpenseDB';
+const OLD_DB_NAME = 'TravelExpenseDB';
+const DB_NAME = 'travel-expense-tool_v1_TravelExpenseDB';
 const DB_VERSION = 1;
 let db;
 
-function openDB() {
+function openDBByName(name) {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    const req = indexedDB.open(name, DB_VERSION);
     req.onupgradeneeded = (e) => {
       const _db = e.target.result;
       if (!_db.objectStoreNames.contains('trips')) {
@@ -242,9 +247,49 @@ function openDB() {
         store.createIndex('tripId', 'tripId', { unique: false });
       }
     };
-    req.onsuccess = (e) => { db = e.target.result; resolve(db); };
+    req.onsuccess = (e) => resolve(e.target.result);
     req.onerror = (e) => reject(e);
   });
+}
+
+function storeGetAll(targetDb, storeName) {
+  return new Promise((resolve) => {
+    const req = targetDb.transaction(storeName, 'readonly').objectStore(storeName).getAll();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => resolve([]);
+  });
+}
+
+function storePut(targetDb, storeName, obj) {
+  return new Promise((resolve, reject) => {
+    const req = targetDb.transaction(storeName, 'readwrite').objectStore(storeName).put(obj);
+    req.onsuccess = () => resolve();
+    req.onerror = (e) => reject(e);
+  });
+}
+
+async function migrateOldDbIfNeeded() {
+  const MIGRATED_FLAG = 'travel-expense-tool_v1_migrated_from_old_db';
+  if (localStorage.getItem(MIGRATED_FLAG)) return;
+  try {
+    const oldDb = await openDBByName(OLD_DB_NAME);
+    const oldTrips = await storeGetAll(oldDb, 'trips');
+    const oldExpenses = await storeGetAll(oldDb, 'expenses');
+    oldDb.close();
+    if (oldTrips.length > 0 || oldExpenses.length > 0) {
+      const newDb = await openDBByName(DB_NAME);
+      for (const t of oldTrips) await storePut(newDb, 'trips', t);
+      for (const e of oldExpenses) await storePut(newDb, 'expenses', e);
+      newDb.close();
+    }
+    localStorage.setItem(MIGRATED_FLAG, '1');
+  } catch (e) { /* 沒有舊資料庫可搬，忽略 */ }
+}
+
+async function openDB() {
+  await migrateOldDbIfNeeded();
+  db = await openDBByName(DB_NAME);
+  return db;
 }
 
 function txStore(name, mode) {
@@ -599,7 +644,7 @@ async function exportTripExcel(tripId, silent) {
 }
 
 async function maybeAutoBackup(tripId) {
-  const key = `autobackup_${tripId}_${todayStr()}`;
+  const key = `travel-expense-tool_v1_autobackup_${tripId}_${todayStr()}`;
   if (localStorage.getItem(key)) return;
   try {
     await exportTripExcel(tripId, true);
@@ -619,6 +664,10 @@ function escapeHtml(str) {
 }
 
 /* ===== 啟動 ===== */
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => { /* 離線快取註冊失敗不影響工具本身使用 */ });
+}
+
 openDB().then(() => {
   navStack = [{ screen: 'trips' }];
   renderTripListScreen();
