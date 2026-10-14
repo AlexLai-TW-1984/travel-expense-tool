@@ -174,7 +174,7 @@
       <div class="currency-toggle" id="ef-currency-toggle"></div>
 
       <label>付款人</label>
-      <input type="text" id="ef-payer" value="Alex">
+      <input type="text" id="ef-payer" placeholder="付款人（選填）">
 
       <label>備註（選填）</label>
       <textarea id="ef-note" placeholder="備註..."></textarea>
@@ -487,7 +487,7 @@ async function openExpenseForm(tripId, expenseId) {
   document.getElementById('ef-date').value = todayStr();
   document.getElementById('ef-item').value = '';
   document.getElementById('ef-cost').value = '';
-  document.getElementById('ef-payer').value = 'Alex';
+  document.getElementById('ef-payer').value = '';
   document.getElementById('ef-note').value = '';
   document.getElementById('ef-delete-btn').style.display = 'none';
   let selectedCurrency = trip.currency;
@@ -584,7 +584,7 @@ async function saveExpense() {
     item,
     cost: Number(cost),
     currency,
-    payer: document.getElementById('ef-payer').value.trim() || 'Alex',
+    payer: document.getElementById('ef-payer').value.trim(),
     note: document.getElementById('ef-note').value.trim(),
     photos: currentPhotos,
     createdAt: currentExpenseId ? (await getExpenseCreatedAt(currentExpenseId)) : Date.now()
